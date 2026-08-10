@@ -1,0 +1,10 @@
+node_modules/
+client/node_modules/
+client/dist/
+data/
+*.db
+*.db-*
+.DS_Store
+*.tgz
+.env
+.env.*
