@@ -238,8 +238,8 @@ export default function Beds() {
         </div>
         <p className="muted">
           {plantMode
-            ? 'Håll över ett frö för info. Varje tryck i en bädd planterar valt frö. Dubbeltryck på ett frö för att ta bort.'
-            : 'Håll över ett frö för info. Dra och ändra storlek på bäddar. Slå på Plantera för att sätta fröer.'}
+            ? 'Nyp för att zooma in på kartan. Varje tryck i en bädd planterar valt frö. Dubbeltryck på ett frö för att ta bort.'
+            : 'Nyp för att zooma. Dra och ändra storlek på bäddar. Slå på Plantera för att sätta fröer.'}
         </p>
         <GardenMap
           garden={garden}

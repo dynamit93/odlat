@@ -288,12 +288,15 @@ button, input, select, textarea {
 .garden-map-wrap {
   position: relative;
   width: 100%;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  border-radius: 16px;
-  border: 1px solid var(--line);
+}
+.garden-map-viewport {
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  border-radius: 12px;
   background: #cfe0c4;
-  padding: 0.35rem;
+  max-height: min(70vh, 640px);
+  border: 1px solid var(--line);
 }
 .garden-svg {
   display: block;
@@ -301,6 +304,31 @@ button, input, select, textarea {
   height: auto;
   touch-action: none;
   user-select: none;
+}
+.garden-zoom-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.55rem;
+}
+.garden-zoom-btn,
+.garden-zoom-reset {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  font: inherit;
+  font-size: 1.1rem;
+  touch-action: manipulation;
+}
+.garden-zoom-reset {
+  font-size: 0.9rem;
 }
 .garden-hint {
   margin: 0.55rem 0 0;
