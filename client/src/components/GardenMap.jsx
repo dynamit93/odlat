@@ -1,8 +1,16 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 const HANDLE = 28;
-const PLANT_HIT_CM = 12; // hit radius for selecting/removing a seed
+const PLANT_HIT_CM = 22; // hit radius for selecting/removing a seed
+const HOVER_HIT_CM = 40;
 const DBL_MS = 350;
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 /**
  * Whole-garden map. Plant mode: each tap adds a seed; double-tap a seed removes it.
@@ -25,6 +33,7 @@ export default function GardenMap({
   const liveRef = useRef(null);
   const lastPlantTap = useRef({ id: null, t: 0 });
   const [live, setLive] = useState(null);
+  const [hover, setHover] = useState(null);
 
   const scale = useMemo(() => {
     const maxW = typeof window !== 'undefined' ? Math.min(window.innerWidth - 32, 920) : 900;
@@ -76,10 +85,10 @@ export default function GardenMap({
     return null;
   }
 
-  function findPlantingAt(bed, localX, localY) {
+  function findPlantingAt(bed, localX, localY, radius = PLANT_HIT_CM) {
     const list = plantingsByBed[bed.id] || [];
     let best = null;
-    let bestD = PLANT_HIT_CM;
+    let bestD = radius;
     for (const pl of list) {
       const d = Math.hypot(pl.x_cm - localX, pl.y_cm - localY);
       if (d <= bestD) {
@@ -90,11 +99,51 @@ export default function GardenMap({
     return best;
   }
 
+  function findPlantingInGarden(p, radius = HOVER_HIT_CM) {
+    for (let i = displayBeds.length - 1; i >= 0; i--) {
+      const b = displayBeds[i];
+      if (
+        p.x < b.x_cm - radius ||
+        p.x > b.x_cm + b.width_cm + radius ||
+        p.y < b.y_cm - radius ||
+        p.y > b.y_cm + b.length_cm + radius
+      ) {
+        continue;
+      }
+      const hit = findPlantingAt(b, p.x - b.x_cm, p.y - b.y_cm, radius);
+      if (hit) return { planting: hit, bed: b };
+    }
+    return null;
+  }
+
+  function tooltipPos(planting, bed) {
+    const svg = svgRef.current;
+    if (!svg) return { left: 8, top: 8, flipDown: false };
+    const svgBox = svg.getBoundingClientRect();
+    const px = svgBox.left + (bed.x_cm + planting.x_cm) * scale;
+    const py = svgBox.top + (bed.y_cm + planting.y_cm) * scale;
+    return {
+      left: Math.max(8, Math.min(window.innerWidth - 248, px + 10)),
+      top: py,
+      flipDown: py < 120,
+    };
+  }
+
+  function setHoverFromPoint(p) {
+    const hit = findPlantingInGarden(p);
+    setHover((prev) => {
+      if (!hit) return prev ? null : prev;
+      if (prev?.planting?.id === hit.planting.id) return prev;
+      return { planting: hit.planting, ...tooltipPos(hit.planting, hit.bed) };
+    });
+  }
+
   function onPointerDown(evt) {
     evt.preventDefault();
     const p = toGardenCm(evt);
     const hit = findBedAt(p);
     if (!hit) {
+      setHover(null);
       onSelectBed?.(null);
       return;
     }
@@ -108,11 +157,13 @@ export default function GardenMap({
       const existing = findPlantingAt(bed, localX, localY);
       const now = Date.now();
       if (existing) {
+        setHover({ planting: existing, ...tooltipPos(existing, bed) });
         const same =
           lastPlantTap.current.id === existing.id &&
           now - lastPlantTap.current.t < DBL_MS;
         if (same) {
           lastPlantTap.current = { id: null, t: 0 };
+          setHover(null);
           onRemovePlanting?.(existing.id);
         } else {
           lastPlantTap.current = { id: existing.id, t: now };
@@ -120,6 +171,7 @@ export default function GardenMap({
         return;
       }
       lastPlantTap.current = { id: null, t: 0 };
+      setHover(null);
       onPlantTap?.({ bedId: bed.id, x: localX, y: localY });
       return;
     }
@@ -138,12 +190,17 @@ export default function GardenMap({
         length_cm: bed.length_cm,
       },
     };
+    setHover(null);
     evt.currentTarget.setPointerCapture?.(evt.pointerId);
   }
 
   function onPointerMove(evt) {
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag) {
+      setHoverFromPoint(toGardenCm(evt));
+      return;
+    }
+    setHover(null);
     const p = toGardenCm(evt);
     const dx = p.x - drag.start.x;
     const dy = p.y - drag.start.y;
@@ -166,6 +223,12 @@ export default function GardenMap({
     onChangeBed?.(patch);
   }
 
+  function onPointerLeave(evt) {
+    if (dragRef.current) return;
+    if (evt.pointerType === 'touch') return;
+    setHover(null);
+  }
+
   function onPointerUp() {
     const drag = dragRef.current;
     if (!drag) return;
@@ -176,8 +239,11 @@ export default function GardenMap({
     if (cur && cur.id === drag.id) onCommitBed?.(cur);
   }
 
+  const hovered = hover?.planting;
+  const frost = hovered?.frostAlert;
+
   return (
-    <div className="garden-map-wrap">
+    <div className="garden-map-wrap" onPointerLeave={onPointerLeave}>
       <svg
         ref={svgRef}
         className="garden-svg"
@@ -188,7 +254,7 @@ export default function GardenMap({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        style={{ touchAction: 'none' }}
+        style={{ touchAction: 'none', cursor: hovered ? 'pointer' : undefined }}
       >
         <defs>
           <pattern id="grass" width="24" height="24" patternUnits="userSpaceOnUse">
@@ -227,23 +293,32 @@ export default function GardenMap({
 
               {plantings.map((pl) => {
                 const r = Math.max(4, ((pl.spacing_cm || 20) / 2) * scale * 0.35);
+                const active = hovered?.id === pl.id;
+                const warn = pl.frostAlert && pl.frostAlert.level !== 'ok';
+                const fill = warn ? '#c45c26' : '#2f6b3a';
+                const cx = x + pl.x_cm * scale;
+                const cy = y + pl.y_cm * scale;
                 return (
-                  <g key={pl.id} style={{ pointerEvents: 'none' }}>
+                  <g
+                    key={pl.id}
+                    onPointerEnter={() => setHover({ planting: pl, ...tooltipPos(pl, bed) })}
+                  >
+                    <circle cx={cx} cy={cy} r={Math.max(16, Math.min(r, 22))} fill="transparent" />
                     <circle
-                      cx={x + pl.x_cm * scale}
-                      cy={y + pl.y_cm * scale}
+                      cx={cx}
+                      cy={cy}
                       r={Math.min(r, 18)}
-                      fill="rgba(47,107,58,0.15)"
-                      stroke="rgba(47,107,58,0.45)"
+                      fill={warn ? 'rgba(196,92,38,0.16)' : 'rgba(47,107,58,0.15)'}
+                      stroke={active ? fill : warn ? 'rgba(196,92,38,0.55)' : 'rgba(47,107,58,0.45)'}
                       strokeDasharray="3 2"
                     />
                     <circle
-                      cx={x + pl.x_cm * scale}
-                      cy={y + pl.y_cm * scale}
-                      r={6}
-                      fill="#2f6b3a"
+                      cx={cx}
+                      cy={cy}
+                      r={active ? 8 : 6}
+                      fill={fill}
                       stroke="#fff"
-                      strokeWidth="1.5"
+                      strokeWidth={active ? 2.5 : 1.5}
                     />
                   </g>
                 );
@@ -256,10 +331,33 @@ export default function GardenMap({
           );
         })}
       </svg>
+      {hovered && (
+        <div
+          className={`planting-tooltip${frost && frost.level !== 'ok' ? ` alert-${frost.level}` : ''}`}
+          role="tooltip"
+          style={{
+            left: hover.left,
+            top: hover.top,
+            transform: hover.flipDown ? 'translateY(12px)' : 'translateY(calc(-100% - 12px))',
+          }}
+        >
+          <strong>{hovered.seed?.name || hovered.custom_name || `Frö #${hovered.id}`}</strong>
+          <p>Sådd {fmtDate(hovered.planted_at)}</p>
+          {hovered.harvest?.from && (
+            <p>
+              Skörd ca {fmtDate(hovered.harvest.from)} – {fmtDate(hovered.harvest.to)}
+            </p>
+          )}
+          {hovered.watering?.message && (
+            <p className={`status-${hovered.watering.status}`}>{hovered.watering.message}</p>
+          )}
+          {frost && <p className="planting-tooltip-alert">{frost.title}</p>}
+        </div>
+      )}
       <p className="garden-hint muted">
         {plantMode
-          ? 'Tryck för att plantera · dubbeltryck på ett frö för att ta bort'
-          : 'Dra bädden för att flytta · handtag för storlek'}
+          ? 'Håll över ett frö för info · tryck för att plantera · dubbeltryck för att ta bort'
+          : 'Håll över ett frö för info · dra bädden för att flytta'}
       </p>
     </div>
   );

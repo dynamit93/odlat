@@ -286,6 +286,7 @@ button, input, select, textarea {
 
 /* Whole garden map */
 .garden-map-wrap {
+  position: relative;
   width: 100%;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
@@ -304,6 +305,47 @@ button, input, select, textarea {
 .garden-hint {
   margin: 0.55rem 0 0;
   font-size: 0.9rem;
+}
+
+.planting-tooltip {
+  position: fixed;
+  z-index: 40;
+  width: max-content;
+  max-width: 240px;
+  padding: 0.65rem 0.8rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  font-size: 0.88rem;
+  line-height: 1.35;
+  color: var(--ink);
+}
+.planting-tooltip strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 1rem;
+  margin-bottom: 0.2rem;
+}
+.planting-tooltip p {
+  margin: 0.15rem 0 0;
+}
+.planting-tooltip-alert {
+  font-weight: 700;
+  margin-top: 0.4rem !important;
+}
+.planting-tooltip.alert-danger {
+  border-color: rgba(163, 59, 43, 0.4);
+  background: #fff8f6;
+}
+.planting-tooltip.alert-warning {
+  border-color: rgba(196, 92, 38, 0.45);
+  background: #fff8f2;
+}
+.planting-tooltip.alert-caution {
+  border-color: rgba(160, 120, 20, 0.4);
+  background: #fffbeb;
 }
 
 .beds-page {
