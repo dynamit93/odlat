@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 
 export default function Seeds() {
@@ -8,6 +8,7 @@ export default function Seeds() {
   const [seeds, setSeeds] = useState([]);
   const [selected, setSelected] = useState(null);
   const [err, setErr] = useState('');
+  const detailRef = useRef(null);
 
   useEffect(() => {
     api.seedCategories().then(setCategories).catch(() => {});
@@ -26,6 +27,11 @@ export default function Seeds() {
     return () => clearTimeout(t);
   }, [q, category]);
 
+  useEffect(() => {
+    if (!selected) return;
+    detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [selected]);
+
   const totalLabel = useMemo(() => {
     if (category) {
       const c = categories.find((x) => x.name === category);
@@ -35,47 +41,50 @@ export default function Seeds() {
     return sum ? `${sum} fröer` : `${seeds.length} fröer`;
   }, [categories, category, seeds.length]);
 
-  return (
-    <div className="layout-split">
-      <div className="card">
-        <h2>Frökatalog</h2>
-        <p className="muted">Välj kategori eller sök bland Plantagen-fröer ({totalLabel}).</p>
+  function toggleSeed(s) {
+    setSelected((prev) => (prev?.id === s.id ? null : s));
+  }
 
-        <div className="chips category-chips" style={{ marginBottom: 12 }}>
+  return (
+    <div className="card">
+      <h2>Frökatalog</h2>
+      <p className="muted">Välj kategori eller sök bland Plantagen-fröer ({totalLabel}).</p>
+
+      <div className="chips category-chips" style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className={`chip chip-btn${category === '' ? ' active' : ''}`}
+          onClick={() => setCategory('')}
+        >
+          Alla
+        </button>
+        {categories.map((c) => (
           <button
             type="button"
-            className={`chip chip-btn${category === '' ? ' active' : ''}`}
-            onClick={() => setCategory('')}
+            key={c.name}
+            className={`chip chip-btn${category === c.name ? ' active' : ''}`}
+            onClick={() => setCategory(c.name)}
           >
-            Alla
+            {c.name} ({c.count})
           </button>
-          {categories.map((c) => (
-            <button
-              type="button"
-              key={c.name}
-              className={`chip chip-btn${category === c.name ? ' active' : ''}`}
-              onClick={() => setCategory(c.name)}
-            >
-              {c.name} ({c.count})
-            </button>
-          ))}
-        </div>
+        ))}
+      </div>
 
-        <div className="field">
-          <label>Sök</label>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="t.ex. tomat, alfalfa, basilika…"
-          />
-        </div>
-        {err && <p className="muted">{err}</p>}
-        <div className="seed-grid">
-          {seeds.map((s) => (
+      <div className="field">
+        <label>Sök</label>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="t.ex. tomat, alfalfa, basilika…"
+        />
+      </div>
+      {err && <p className="muted">{err}</p>}
+      <div className="seed-grid">
+        {seeds.map((s) => (
+          <Fragment key={s.id}>
             <article
               className={`seed-card${selected?.id === s.id ? ' selected' : ''}`}
-              key={s.id}
-              onClick={() => setSelected(s)}
+              onClick={() => toggleSeed(s)}
             >
               {s.image_path ? (
                 <img src={s.image_path} alt={s.name} />
@@ -89,61 +98,70 @@ export default function Seeds() {
                 </div>
               </div>
             </article>
-          ))}
-        </div>
-        {!seeds.length && !err && <p className="muted">Inga fröer matchade.</p>}
-      </div>
-
-      <div className="card seed-detail">
-        <h2>Detaljer</h2>
-        {!selected && <p className="muted">Välj ett frö för att se odlingsfakta.</p>}
-        {selected && (
-          <>
-            <h3>{selected.name}</h3>
-            {selected.category && <p className="muted">{selected.category}</p>}
-            {selected.image_path && (
-              <img src={selected.image_path} alt="" style={{ width: '100%', borderRadius: 12, marginBottom: 12 }} />
+            {selected?.id === s.id && (
+              <div className="card seed-detail seed-detail-inline" ref={detailRef}>
+                <SeedDetails seed={selected} onClose={() => setSelected(null)} />
+              </div>
             )}
-            {selected.description && <p className="seed-description">{selected.description}</p>}
-            <div className="chips" style={{ marginBottom: 12 }}>
-              {(selected.icons || []).slice(0, 8).map((ic, i) => (
-                <span className="chip" key={i}>
-                  {ic.label}
-                </span>
-              ))}
-            </div>
-            <h4 className="detail-section">Odling</h4>
-            <Fact label="Sol" value={selected.sun} />
-            <Fact label="Vatten" value={selected.water} />
-            <Fact label="Såtid" value={selected.sow_time} />
-            <Fact label="Blomningstid" value={selected.bloom_time} />
-            <Fact label="Radavstånd" value={fmtCm(selected.row_spacing_cm)} />
-            <Fact label="Sådjup" value={fmtCm(selected.sow_depth_cm)} />
-            <Fact label="Fullvuxen" value={fmtCm(selected.mature_height_cm)} />
-            <Fact label="Vetenskapligt namn" value={selected.scientific_name} />
-
-            <h4 className="detail-section">Egenskaper</h4>
-            <Fact label="EAN" value={selected.ean} />
-            <Fact label="Produktnummer" value={selected.sku} />
-            <Fact label="Färg" value={selected.color} />
-            <Fact label="Höjd" value={fmtCm(selected.pkg_height_cm)} />
-            <Fact label="Bredd" value={fmtCm(selected.pkg_width_cm)} />
-            <Fact label="Längd" value={fmtCm(selected.pkg_length_cm)} />
-            <Fact label="Ursprungsland" value={selected.origin_country} />
-            <Fact label="Varumärke" value={selected.brand} />
-
-            {selected.source_url && (
-              <p className="muted" style={{ marginTop: 12 }}>
-                Källa:{' '}
-                <a href={selected.source_url} target="_blank" rel="noreferrer">
-                  Plantagen
-                </a>
-              </p>
-            )}
-          </>
-        )}
+          </Fragment>
+        ))}
       </div>
+      {!seeds.length && !err && <p className="muted">Inga fröer matchade.</p>}
     </div>
+  );
+}
+
+function SeedDetails({ seed, onClose }) {
+  return (
+    <>
+      <div className="seed-detail-header">
+        <h2>Detaljer</h2>
+        <button type="button" className="btn secondary" onClick={onClose}>
+          Stäng
+        </button>
+      </div>
+      <h3>{seed.name}</h3>
+      {seed.category && <p className="muted">{seed.category}</p>}
+      {seed.image_path && (
+        <img src={seed.image_path} alt="" style={{ width: '100%', maxWidth: 420, borderRadius: 12, marginBottom: 12 }} />
+      )}
+      {seed.description && <p className="seed-description">{seed.description}</p>}
+      <div className="chips" style={{ marginBottom: 12 }}>
+        {(seed.icons || []).slice(0, 8).map((ic, i) => (
+          <span className="chip" key={i}>
+            {ic.label}
+          </span>
+        ))}
+      </div>
+      <h4 className="detail-section">Odling</h4>
+      <Fact label="Sol" value={seed.sun} />
+      <Fact label="Vatten" value={seed.water} />
+      <Fact label="Såtid" value={seed.sow_time} />
+      <Fact label="Blomningstid" value={seed.bloom_time} />
+      <Fact label="Radavstånd" value={fmtCm(seed.row_spacing_cm)} />
+      <Fact label="Sådjup" value={fmtCm(seed.sow_depth_cm)} />
+      <Fact label="Fullvuxen" value={fmtCm(seed.mature_height_cm)} />
+      <Fact label="Vetenskapligt namn" value={seed.scientific_name} />
+
+      <h4 className="detail-section">Egenskaper</h4>
+      <Fact label="EAN" value={seed.ean} />
+      <Fact label="Produktnummer" value={seed.sku} />
+      <Fact label="Färg" value={seed.color} />
+      <Fact label="Höjd" value={fmtCm(seed.pkg_height_cm)} />
+      <Fact label="Bredd" value={fmtCm(seed.pkg_width_cm)} />
+      <Fact label="Längd" value={fmtCm(seed.pkg_length_cm)} />
+      <Fact label="Ursprungsland" value={seed.origin_country} />
+      <Fact label="Varumärke" value={seed.brand} />
+
+      {seed.source_url && (
+        <p className="muted" style={{ marginTop: 12 }}>
+          Källa:{' '}
+          <a href={seed.source_url} target="_blank" rel="noreferrer">
+            Plantagen
+          </a>
+        </p>
+      )}
+    </>
   );
 }
 
